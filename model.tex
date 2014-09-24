@@ -17,14 +17,73 @@
 
 			\subsubsection{Threat Model Evaluation}
 
-	\section{HSM}
-		\subsection{What is HSM?}
+	\section{CloudHSM}
+		\subsection{What is CloudHSM?}
+
+		To define a CloudHSM, we must first understand what is a Hardware Security Module (HSM) is, and how it functions. \\
+
+		\subsubsection{What is a HSM?}
+
+		A HSM is  a dedicated secure coprocessor that is designed for the management of the key during the keys' lifecycle. HSM act as trust anchors that protect the cryptographic functions of an application by securely managing, processing and storing crytopgraic keys inside a hardend, tamper resistant hardware device. A HSM does not output decrypted data or decrypted program instructions on the bus except in encrypted form, therefore this means it can assume a level of security to protect itself from eavesdropping or emission attacks. There are also protections, whereby memory is zeroed when attempts of probing or scanning are sensed. 
+
+		\paragraph{}
+
+
 
 		\subsection{System Process}
 
 			\subsection{Architectural Overview}
 
+			\subsection{Role Based Access Controls}
+			
+			\begin{itemize}
+			
+				\item Each HSM partition has a special access control role called the {"Owner"}
+				
+				\item Access to destructive HSM commands (init) can be only be done if via the admin interface which is only available through the SCLI (i.e it is not permitted via Network Trust Link)
+			\end{itemize}
+
+			The standard administrative roles associated with the Luna appliance and HSM are:
+
+			Admin, who has the possibility to perform all possible commands. \\
+
+			Operator who can perform a subset of commands, including some that affect the state of the appliance or its HSM. \\
+
+			Monitor who can perform observational commands only, but cannot affect the state or contents of the appliance or its HSM \\
+
 			\subsubsection{Key Retrieval}
+
+			Each HSM Client is assigned one or more specific HSM partition, and they communicate with the CloudHSM interface via a {"Network Trust Link"} and authenticate with a digital certificate exchange and unique HSM partition challenge.  \\
+
+			The Network Trust Link is a layer built on top of SSL that provides a secure transport of information between the HSM Client and CloudHSM. The network trust link compromises of three parts:
+
+			\begin{itemize}
+
+				\item The network trust link server, which is hosted via the CloudHSM.	
+			
+				\item Network Trust Link Agents, which is installed on the client server
+			
+				\item Network Trust Link, is the secure connection that connects between the network trust link server and agent.
+
+			\end{itemize}
+
+			This Network Trust Link uses a two way digital certificate authentication, and SSL data encryption to protect the information flow between the HSM client and CloudHSM. The SSL protocol used within the network trust link used to connect the Network Trust Link agent and server creates a trusted secure channel for communication. Any application running an agent will be able to connect to the HSM via the network trust link. \\\
+
+			\textbf{Authentication}
+				The HSM has a three layer authentication scheme that is used to authenticate and role based access control model to achieve high level of security between the client processes and HSM partitions. This important as the CloudHSM is different from the traditional HSM due to the fact that the HSM now exposes a network API to communicate and offer cryptographic functions. \\\
+
+			%\includegraphics[width=\textwidth]{3-layer-auth}
+
+			The three layers are:
+
+			\begin{enumerate}
+				\item HSM Partiion Activation: An HSM partion within the HSM remains inaccessible to clients until an administrator logs on and explicitly activates an HSM partition. HSM activation requires authentication with a password
+
+				\item Network Trust Link Activation
+				Before an application can connect to the HSM. The administrator must authorize access for the client to access the HSM. The registration involves a generation of a self signed certificate on the server which is bound to the host name and IP address. After the client creates the certificate, the client and the HSM exchange their certificates via a {"secure file transfer process"}. After this exchange the admin with register the certificate using against the HSM.Once this process is complete, the client is able to create a network trust link. 
+
+				\item To gain access to the data within the HSM partition, an application process running must first provide an HSM partion password to te LUNA sa. The password is generated during the creation of the HSM partion. The agent running the client machine, combines the password with a unique one time challenge.  The application the login is a normal process of providing a password via the API call, and the additional security provided by the one-time challenge mechaninism is internal to the Network Trust Link. 
+			\end{enumerate}
 
 			\subsubsection{Key Bootstrapping Process}
 
@@ -34,8 +93,11 @@
 
 			\subsubsection{System Threats}
 
-			\subsubsection{Threat Model Evaluation}
+			The thing to note here is that this process ensures that the key material we are protecting and placing in our HSM (in our case the private key used to encrypt/decrypt our database password) is kept safe. This is because the key material does not leave the HSM partition. In other words, the key material is not exposed within the network trust link. So, if an attacker is able to obtain the client's SSL private key it DOES NOT pose a risk to the security of the key material stored in the HSM. However, because we store the private key that is used to encrypt the database password, it does not matter. This is because if the attacker has the SSL private key, he is able to make an authenticated response, to decrypt the password using the private key stored in the HSM. \\\
 
+			Upon reading some documentation on the Luna's HSM. It mentioned that an attacker must have logical network access to steal the private key and certificate in order to move them to another platform. And, highlighted that it is necessary to have physical access to configure the network in order to masquerade as legitimate client on the network. This process seems to hide the fact, that we are working in a cloud environment. In this cloud environment we have a  virtulized instances which can be easily replicated, and do not require physical access to the clients. This means that one of the assumptions that Luna make conflicts with the assumptions made when moving such an process to the cloud. \\\
+
+			Another problem faced with model is that there is no control over malicious applications that can be executed on a legitimate server where a client is located. This stems from the fact, there are not any low level authentication mechanisms that could be used to uniquely identify different applications if they are run by user, as all authenicated checks are checked via the a verfication of user of the calling process,
 	\section{SoftHSM}
 
 		\subsection{What is SoftHSM?}
